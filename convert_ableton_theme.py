@@ -25,6 +25,29 @@ def rgb_to_hex(r, g, b, a=255):
         print(f"Error converting color values {r},{g},{b},{a}: {str(e)}")
         return "#bcbcbc"  # Return a default gray if conversion fails
 
+def darken_hex_color(hex_color, percent=0.94):
+    """Darken a hex color by multiplying RGB values by the given percent."""
+    # Remove # if present
+    hex_color = hex_color.lstrip('#')
+    
+    # Convert to RGB
+    r = int(hex_color[0:2], 16)
+    g = int(hex_color[2:4], 16)
+    b = int(hex_color[4:6], 16)
+    
+    # Darken by multiplying by percent
+    r = int(r * percent)
+    g = int(g * percent)
+    b = int(b * percent)
+    
+    # Ensure values are in valid range
+    r = min(255, max(0, r))
+    g = min(255, max(0, g))
+    b = min(255, max(0, b))
+    
+    # Convert back to hex
+    return f"#{r:02x}{g:02x}{b:02x}"
+
 def find_ableton_resources_folder():
     """Try to automatically find the Ableton Resources folder based on OS"""
     if sys.platform == "darwin":  # macOS
@@ -52,13 +75,15 @@ def find_ableton_resources_folder():
     
     return None
 
-def get_theme_files(directory, filter_prefix=None):
+def get_theme_files(directory, exclude_prefix=None, include_prefix=None):
     """Get .ask files in a directory, optionally filtered by prefix"""
     try:
         if os.path.exists(directory):
             files = [f for f in os.listdir(directory) if f.endswith('.ask')]
-            if filter_prefix:
-                files = [f for f in files if f.startswith(filter_prefix)]
+            if exclude_prefix:
+                files = [f for f in files if not f.startswith(exclude_prefix)]
+            if include_prefix:
+                files = [f for f in files if f.startswith(include_prefix)]
             return files
         return []
     except Exception:
@@ -194,6 +219,67 @@ def convert_theme(live10_file, live12_template_file, output_dir=None):
         except Exception as e:
             print(f"Error setting BrowserTagBackground: {r},{g},{b},{alpha} - {str(e)}")
     
+    # Special handling for take lane colors based on surface colors
+    # First, find the hex color values for SurfaceHighlight and SurfaceBackground
+    if "SurfaceHighlight" in live10_params:
+        r, g, b, alpha = live10_params["SurfaceHighlight"]
+        try:
+            surface_highlight_color = rgb_to_hex(r, g, b, alpha)
+            
+            # Set TakeLaneTrackHighlighted to match SurfaceHighlight
+            take_lane_highlighted_element = theme_live12.find("TakeLaneTrackHighlighted")
+            if take_lane_highlighted_element is not None:
+                take_lane_highlighted_element.set("Value", surface_highlight_color)
+                print(f"Set TakeLaneTrackHighlighted to match SurfaceHighlight: {surface_highlight_color}")
+                updated_count += 1
+        except Exception as e:
+            print(f"Error setting TakeLaneTrackHighlighted: {r},{g},{b},{alpha} - {str(e)}")
+    
+    if "SurfaceBackground" in live10_params:
+        r, g, b, alpha = live10_params["SurfaceBackground"]
+        try:
+            surface_background_color = rgb_to_hex(r, g, b, alpha)
+            
+            # Set TakeLaneTrackNotHighlighted to be slightly darker than SurfaceBackground
+            take_lane_not_highlighted_element = theme_live12.find("TakeLaneTrackNotHighlighted")
+            if take_lane_not_highlighted_element is not None:
+                darkened_color = darken_hex_color(surface_background_color, 0.94)  # 6% darker
+                take_lane_not_highlighted_element.set("Value", darkened_color)
+                print(f"Set TakeLaneTrackNotHighlighted to be darker than SurfaceBackground: {darkened_color}")
+                updated_count += 1
+        except Exception as e:
+            print(f"Error setting TakeLaneTrackNotHighlighted: {r},{g},{b},{alpha} - {str(e)}")
+    
+    # Special handling for ViewControlOn - use ChosenDefault color
+    if "ChosenDefault" in live10_params:
+        r, g, b, alpha = live10_params["ChosenDefault"]
+        try:
+            chosen_default_color = rgb_to_hex(r, g, b, alpha)
+            
+            # Set ViewControlOn to match ChosenDefault
+            view_control_on_element = theme_live12.find("ViewControlOn")
+            if view_control_on_element is not None:
+                view_control_on_element.set("Value", chosen_default_color)
+                print(f"Set ViewControlOn to match ChosenDefault: {chosen_default_color}")
+                updated_count += 1
+        except Exception as e:
+            print(f"Error setting ViewControlOn: {r},{g},{b},{alpha} - {str(e)}")
+    
+    # Special handling for ViewControlOff - use TransportOffBackground color
+    if "TransportOffBackground" in live10_params:
+        r, g, b, alpha = live10_params["TransportOffBackground"]
+        try:
+            transport_off_background_color = rgb_to_hex(r, g, b, alpha)
+            
+            # Set ViewControlOff to match TransportOffBackground
+            view_control_off_element = theme_live12.find("ViewControlOff")
+            if view_control_off_element is not None:
+                view_control_off_element.set("Value", transport_off_background_color)
+                print(f"Set ViewControlOff to match TransportOffBackground: {transport_off_background_color}")
+                updated_count += 1
+        except Exception as e:
+            print(f"Error setting ViewControlOff: {r},{g},{b},{alpha} - {str(e)}")
+    
     try:
         # Save the updated Live 12 template to the output file
         tree_live12.write(output_file, encoding='utf-8', xml_declaration=True)
@@ -242,28 +328,33 @@ def main():
         themes_folder = os.path.expanduser("~")  # Default to home directory
     
     # Step 1: Get the Live 10/11 theme file to convert
-    print("\nSTEP 1: Select the Live 10/11 theme file to convert")
+    print("\nSTEP 1: Select the theme file to convert")
     
-    # First try current directory
-    current_dir_files = get_theme_files(os.getcwd())
-    if current_dir_files:
-        print(f"Found {len(current_dir_files)} theme files in current directory.")
-        file_choice = select_file_from_list(current_dir_files, "Select a theme file to convert:")
-        if file_choice:
-            live10_file = os.path.join(os.getcwd(), file_choice)
+    if themes_folder:
+        # Get all themes EXCEPT those starting with "Default"
+        theme_files = get_theme_files(themes_folder, exclude_prefix="Default")
+        if theme_files:
+            print(f"Found {len(theme_files)} custom theme files in Ableton Themes folder.")
+            file_choice = select_file_from_list(theme_files, "Select a theme file to convert:")
+            if file_choice:
+                live10_file = os.path.join(themes_folder, file_choice)
+            else:
+                # User wants to specify a different path
+                live10_file = get_file_path("Enter the full path to your theme file: ")
         else:
-            # User wants to specify a different path
-            live10_file = get_file_path("Enter the full path to your Live 10/11 theme file: ")
+            print("No custom themes found in the Ableton Themes folder.")
+            live10_file = get_file_path("Enter the full path to your theme file: ")
     else:
-        # No files in current directory, ask for path
-        live10_file = get_file_path("Enter the full path to your Live 10/11 theme file: ")
+        # No themes folder found, ask for path
+        print("Couldn't find Ableton Themes folder. Please provide the path manually.")
+        live10_file = get_file_path("Enter the full path to your theme file: ")
     
     # Step 2: Get the Live 12 template file
     print("\nSTEP 2: Select a Live 12 template file")
     
     if themes_folder:
         # Only get themes that start with "Default"
-        theme_files = get_theme_files(themes_folder, filter_prefix="Default")
+        theme_files = get_theme_files(themes_folder, include_prefix="Default")
         if theme_files:
             print(f"Found {len(theme_files)} default Ableton theme files.")
             file_choice = select_file_from_list(theme_files, "Select a default Live 12 theme to use as template:")
