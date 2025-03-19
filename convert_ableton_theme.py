@@ -192,10 +192,26 @@ def convert_theme(live10_file, live12_template_file, output_dir=None):
         
         live10_params[tag_name] = (r, g, b, alpha)
     
+    # Keep track of parameters that were in the Live 10 file but not in Live 12
+    live10_only_params = set(live10_params.keys())
+    
+    # Keep track of parameters that are in Live 12 but not in Live 10
+    live12_only_params = set()
+    for element in theme_live12:
+        if element.tag not in live10_params and not element.tag.startswith("Standard") and not element.tag.startswith("Overload") and not element.tag.startswith("Disabled") and not element.tag.startswith("Headphones") and not element.tag.startswith("SendsOnly") and not element.tag.startswith("BipolarGainReduction") and not element.tag.startswith("Orange"):
+            live12_only_params.add(element.tag)
+    
+    # Print information about unique parameters
+    print("\n=== Parameter Analysis ===")
+    print(f"Found {len(live10_params)} color parameters in the Live 10/11 theme")
+    print(f"Found {len(live12_only_params)} parameters in Live 12 that don't exist in Live 10/11")
+    
     # Count how many parameters were updated
     updated_count = 0
+    new_param_count = 0
     
     # Update the Live 12 template with values from Live 10 where parameter names match
+    print("\n=== Transferring Matching Parameters ===")
     for element in theme_live12:
         if element.tag in live10_params:
             r, g, b, alpha = live10_params[element.tag]
@@ -204,86 +220,167 @@ def convert_theme(live10_file, live12_template_file, output_dir=None):
                 hex_value = rgb_to_hex(r, g, b, alpha)
                 element.set("Value", hex_value)
                 updated_count += 1
+                live10_only_params.remove(element.tag)  # Remove from Live 10 only set
+                print(f"Transferred {element.tag}: {hex_value}")
             except Exception as e:
                 print(f"Error converting {element.tag}: {r},{g},{b},{alpha} - {str(e)}")
     
+    # Special handling for parameters
+    print("\n=== Special Parameter Handling ===")
+    
     # Special handling for BrowserTagBackground - use StandbySelectionBackground color
     browser_tag_element = theme_live12.find("BrowserTagBackground")
-    if browser_tag_element is not None and "StandbySelectionBackground" in live10_params:
-        r, g, b, alpha = live10_params["StandbySelectionBackground"]
-        try:
-            hex_value = rgb_to_hex(r, g, b, alpha)
-            browser_tag_element.set("Value", hex_value)
-            print(f"Set BrowserTagBackground to match StandbySelectionBackground: {hex_value}")
-            updated_count += 1
-        except Exception as e:
-            print(f"Error setting BrowserTagBackground: {r},{g},{b},{alpha} - {str(e)}")
+    if browser_tag_element is not None:
+        if "BrowserTagBackground" in live10_params:
+            print("BrowserTagBackground exists in Live 10/11 theme, using that value")
+        elif "StandbySelectionBackground" in live10_params:
+            r, g, b, alpha = live10_params["StandbySelectionBackground"]
+            try:
+                hex_value = rgb_to_hex(r, g, b, alpha)
+                browser_tag_element.set("Value", hex_value)
+                print(f"Set BrowserTagBackground to match StandbySelectionBackground: {hex_value}")
+                updated_count += 1
+                new_param_count += 1
+                if "BrowserTagBackground" in live12_only_params:
+                    live12_only_params.remove("BrowserTagBackground")
+            except Exception as e:
+                print(f"Error setting BrowserTagBackground: {r},{g},{b},{alpha} - {str(e)}")
+        else:
+            print("Warning: StandbySelectionBackground not found in Live 10/11 theme, using default for BrowserTagBackground")
     
     # Special handling for take lane colors based on surface colors
     # First, find the hex color values for SurfaceHighlight and SurfaceBackground
-    if "SurfaceHighlight" in live10_params:
-        r, g, b, alpha = live10_params["SurfaceHighlight"]
-        try:
-            surface_highlight_color = rgb_to_hex(r, g, b, alpha)
-            
-            # Set TakeLaneTrackHighlighted to match SurfaceHighlight
-            take_lane_highlighted_element = theme_live12.find("TakeLaneTrackHighlighted")
-            if take_lane_highlighted_element is not None:
+    take_lane_highlighted_element = theme_live12.find("TakeLaneTrackHighlighted")
+    if take_lane_highlighted_element is not None:
+        if "TakeLaneTrackHighlighted" in live10_params:
+            print("TakeLaneTrackHighlighted exists in Live 10/11 theme, using that value")
+        elif "SurfaceHighlight" in live10_params:
+            r, g, b, alpha = live10_params["SurfaceHighlight"]
+            try:
+                surface_highlight_color = rgb_to_hex(r, g, b, alpha)
+                
+                # Set TakeLaneTrackHighlighted to match SurfaceHighlight
                 take_lane_highlighted_element.set("Value", surface_highlight_color)
                 print(f"Set TakeLaneTrackHighlighted to match SurfaceHighlight: {surface_highlight_color}")
                 updated_count += 1
-        except Exception as e:
-            print(f"Error setting TakeLaneTrackHighlighted: {r},{g},{b},{alpha} - {str(e)}")
+                new_param_count += 1
+                if "TakeLaneTrackHighlighted" in live12_only_params:
+                    live12_only_params.remove("TakeLaneTrackHighlighted")
+            except Exception as e:
+                print(f"Error setting TakeLaneTrackHighlighted: {r},{g},{b},{alpha} - {str(e)}")
+        else:
+            print("Warning: SurfaceHighlight not found in Live 10/11 theme, using default for TakeLaneTrackHighlighted")
     
-    if "SurfaceBackground" in live10_params:
-        r, g, b, alpha = live10_params["SurfaceBackground"]
-        try:
-            surface_background_color = rgb_to_hex(r, g, b, alpha)
-            
-            # Set TakeLaneTrackNotHighlighted to be slightly darker than SurfaceBackground
-            take_lane_not_highlighted_element = theme_live12.find("TakeLaneTrackNotHighlighted")
-            if take_lane_not_highlighted_element is not None:
+    take_lane_not_highlighted_element = theme_live12.find("TakeLaneTrackNotHighlighted")
+    if take_lane_not_highlighted_element is not None:
+        if "TakeLaneTrackNotHighlighted" in live10_params:
+            print("TakeLaneTrackNotHighlighted exists in Live 10/11 theme, using that value")
+        elif "SurfaceBackground" in live10_params:
+            r, g, b, alpha = live10_params["SurfaceBackground"]
+            try:
+                surface_background_color = rgb_to_hex(r, g, b, alpha)
+                
+                # Set TakeLaneTrackNotHighlighted to be slightly darker than SurfaceBackground
                 darkened_color = darken_hex_color(surface_background_color, 0.94)  # 6% darker
                 take_lane_not_highlighted_element.set("Value", darkened_color)
                 print(f"Set TakeLaneTrackNotHighlighted to be darker than SurfaceBackground: {darkened_color}")
                 updated_count += 1
-        except Exception as e:
-            print(f"Error setting TakeLaneTrackNotHighlighted: {r},{g},{b},{alpha} - {str(e)}")
+                new_param_count += 1
+                if "TakeLaneTrackNotHighlighted" in live12_only_params:
+                    live12_only_params.remove("TakeLaneTrackNotHighlighted")
+            except Exception as e:
+                print(f"Error setting TakeLaneTrackNotHighlighted: {r},{g},{b},{alpha} - {str(e)}")
+        else:
+            print("Warning: SurfaceBackground not found in Live 10/11 theme, using default for TakeLaneTrackNotHighlighted")
     
     # Special handling for ViewControlOn - use ChosenDefault color
-    if "ChosenDefault" in live10_params:
-        r, g, b, alpha = live10_params["ChosenDefault"]
-        try:
-            chosen_default_color = rgb_to_hex(r, g, b, alpha)
-            
-            # Set ViewControlOn to match ChosenDefault
-            view_control_on_element = theme_live12.find("ViewControlOn")
-            if view_control_on_element is not None:
+    view_control_on_element = theme_live12.find("ViewControlOn")
+    if view_control_on_element is not None:
+        if "ViewControlOn" in live10_params:
+            print("ViewControlOn exists in Live 10/11 theme, using that value")
+        elif "ChosenDefault" in live10_params:
+            r, g, b, alpha = live10_params["ChosenDefault"]
+            try:
+                chosen_default_color = rgb_to_hex(r, g, b, alpha)
+                
+                # Set ViewControlOn to match ChosenDefault
                 view_control_on_element.set("Value", chosen_default_color)
                 print(f"Set ViewControlOn to match ChosenDefault: {chosen_default_color}")
                 updated_count += 1
-        except Exception as e:
-            print(f"Error setting ViewControlOn: {r},{g},{b},{alpha} - {str(e)}")
+                new_param_count += 1
+                if "ViewControlOn" in live12_only_params:
+                    live12_only_params.remove("ViewControlOn")
+            except Exception as e:
+                print(f"Error setting ViewControlOn: {r},{g},{b},{alpha} - {str(e)}")
+        else:
+            print("Warning: ChosenDefault not found in Live 10/11 theme, using default for ViewControlOn")
     
     # Special handling for ViewControlOff - use TransportOffBackground color
-    if "TransportOffBackground" in live10_params:
-        r, g, b, alpha = live10_params["TransportOffBackground"]
-        try:
-            transport_off_background_color = rgb_to_hex(r, g, b, alpha)
-            
-            # Set ViewControlOff to match TransportOffBackground
-            view_control_off_element = theme_live12.find("ViewControlOff")
-            if view_control_off_element is not None:
+    view_control_off_element = theme_live12.find("ViewControlOff")
+    if view_control_off_element is not None:
+        if "ViewControlOff" in live10_params:
+            print("ViewControlOff exists in Live 10/11 theme, using that value")
+        elif "TransportOffBackground" in live10_params:
+            r, g, b, alpha = live10_params["TransportOffBackground"]
+            try:
+                transport_off_background_color = rgb_to_hex(r, g, b, alpha)
+                
+                # Set ViewControlOff to match TransportOffBackground
                 view_control_off_element.set("Value", transport_off_background_color)
                 print(f"Set ViewControlOff to match TransportOffBackground: {transport_off_background_color}")
                 updated_count += 1
-        except Exception as e:
-            print(f"Error setting ViewControlOff: {r},{g},{b},{alpha} - {str(e)}")
+                new_param_count += 1
+                if "ViewControlOff" in live12_only_params:
+                    live12_only_params.remove("ViewControlOff")
+            except Exception as e:
+                print(f"Error setting ViewControlOff: {r},{g},{b},{alpha} - {str(e)}")
+        else:
+            print("Warning: TransportOffBackground not found in Live 10/11 theme, using default for ViewControlOff")
+    
+    # Special handling for MainViewFocusIndicator - use ControlOffForeground color
+    main_view_focus_indicator_element = theme_live12.find("MainViewFocusIndicator")
+    if main_view_focus_indicator_element is not None:
+        if "MainViewFocusIndicator" in live10_params:
+            print("MainViewFocusIndicator exists in Live 10/11 theme, using that value")
+        elif "ControlOffForeground" in live10_params:
+            r, g, b, alpha = live10_params["ControlOffForeground"]
+            try:
+                control_off_foreground_color = rgb_to_hex(r, g, b, alpha)
+                
+                # Set MainViewFocusIndicator to match ControlOffForeground
+                main_view_focus_indicator_element.set("Value", control_off_foreground_color)
+                print(f"Set MainViewFocusIndicator to match ControlOffForeground: {control_off_foreground_color}")
+                updated_count += 1
+                new_param_count += 1
+                if "MainViewFocusIndicator" in live12_only_params:
+                    live12_only_params.remove("MainViewFocusIndicator")
+            except Exception as e:
+                print(f"Error setting MainViewFocusIndicator: {r},{g},{b},{alpha} - {str(e)}")
+        else:
+            print("Warning: ControlOffForeground not found in Live 10/11 theme, using default for MainViewFocusIndicator")
+    
+    # Print information about other new parameters
+    if live12_only_params:
+        print("\n=== New Parameters from Live 12 Template ===")
+        print("The following parameters exist only in Live 12 and are using template values:")
+        for param in sorted(live12_only_params):
+            element = theme_live12.find(param)
+            if element is not None and "Value" in element.attrib:
+                print(f"  {param}: {element.get('Value')}")
+            else:
+                print(f"  {param}: [complex structure]")
+    
+    # Print information about parameters only in Live 10
+    if live10_only_params:
+        print("\n=== Parameters Only in Live 10/11 ===")
+        print("The following parameters exist only in Live 10/11 and were not transferred:")
+        for param in sorted(live10_only_params):
+            print(f"  {param}")
     
     try:
         # Save the updated Live 12 template to the output file
         tree_live12.write(output_file, encoding='utf-8', xml_declaration=True)
-        print(f"Wrote converted theme to {output_file}")
+        print(f"\nWrote converted theme to {output_file}")
         
         # Format the XML for better readability
         with open(output_file, 'r', encoding='utf-8') as f:
@@ -307,6 +404,7 @@ def convert_theme(live10_file, live12_template_file, output_dir=None):
             f.write(formatted_content)
         
         print(f"\nSuccess! Updated {updated_count} color parameters.")
+        print(f"Added special handling for {new_param_count} new Live 12 parameters.")
         print(f"Formatted theme file saved to {output_file}")
         return output_file
     except Exception as e:
